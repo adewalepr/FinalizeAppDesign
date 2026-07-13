@@ -1,0 +1,1674 @@
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  Home, Compass, Briefcase, Users, Bell, MessageSquare,
+  Search, Plus, Star, TrendingUp, Award, MapPin, Heart,
+  MessageCircle, Share2, Bookmark, Play, ChevronRight,
+  Zap, Settings, Filter, MoreHorizontal, Clock, Globe,
+  CheckCircle, X, Send, Image, Film, FolderOpen,
+  Calendar, ArrowLeft, Smile, Paperclip, ChevronDown,
+  AtSign, Hash, Video,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { toast, Toaster } from "sonner";
+
+// ─── Types ─────────────────────────────────────────────────────────────────
+
+type View = "feed" | "explore" | "opportunities" | "profile" | "messages" | "events";
+
+interface PostUser { name: string; username: string; avatar: string; score: number; verified: boolean; }
+interface BasePost { id: number; type: "reel" | "project" | "text"; user: PostUser; caption: string; tags: string[]; likes: number; comments: number; shares: number; saved: number; timeAgo: string; }
+interface ReelPost extends BasePost { type: "reel"; thumbnail: string; }
+interface ProjectPost extends BasePost { type: "project"; images: string[]; }
+interface TextPost extends BasePost { type: "text"; }
+type Post = ReelPost | ProjectPost | TextPost;
+
+// ─── Animation Variants ────────────────────────────────────────────────────
+
+const pageVariants = {
+  initial: { opacity: 0, y: 14 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.28, ease: [0.25, 0.46, 0.45, 0.94] } },
+  exit: { opacity: 0, y: -8, transition: { duration: 0.16, ease: "easeIn" } },
+};
+
+const staggerContainer = {
+  animate: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
+};
+
+const staggerItem = {
+  initial: { opacity: 0, y: 22 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.38, ease: [0.25, 0.46, 0.45, 0.94] } },
+};
+
+const slideFromRight = {
+  initial: { x: "100%", opacity: 0 },
+  animate: { x: 0, opacity: 1, transition: { type: "spring" as const, stiffness: 420, damping: 36 } },
+  exit: { x: "100%", opacity: 0, transition: { duration: 0.22, ease: "easeIn" } },
+};
+
+const slideFromTop = {
+  initial: { y: "-100%", opacity: 0 },
+  animate: { y: 0, opacity: 1, transition: { type: "spring" as const, stiffness: 400, damping: 32 } },
+  exit: { y: "-100%", opacity: 0, transition: { duration: 0.2, ease: "easeIn" } },
+};
+
+const scaleModal = {
+  initial: { scale: 0.92, opacity: 0, y: 24 },
+  animate: { scale: 1, opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 340, damping: 28 } },
+  exit: { scale: 0.95, opacity: 0, y: 12, transition: { duration: 0.15, ease: "easeIn" } },
+};
+
+const backdropVars = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: { duration: 0.2 } },
+  exit: { opacity: 0, transition: { duration: 0.18 } },
+};
+
+// ─── Mock Data ──────────────────────────────────────────────────────────────
+
+const ME = {
+  name: "Amara Osei", username: "@amara.creates",
+  avatar: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=80&h=80&fit=crop&auto=format",
+  role: "Visual Designer & Art Director", location: "Lagos, Nigeria",
+  score: 784, followers: 12400, following: 890, projects: 47,
+  bio: "Building visual languages for the next wave of African brands. Available for brand identity, editorial, and motion.",
+  skills: ["Brand Identity", "Motion Design", "Art Direction", "Editorial", "Figma"],
+};
+
+const POSTS: Post[] = [
+  { id: 1, type: "reel", user: { name: "Kofi Mensah", username: "@kofi.motion", score: 921, verified: true, avatar: "https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=48&h=48&fit=crop&auto=format" }, thumbnail: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=420&h=640&fit=crop&auto=format", caption: "Motion study — fluid transitions between brand states. Six weeks of iteration distilled into 90 seconds. Full breakdown in portfolio ✦", tags: ["#MotionDesign", "#Branding", "#AfterEffects"], likes: 2847, comments: 143, shares: 89, saved: 412, timeAgo: "2h" },
+  { id: 2, type: "project", user: { name: "Zara Adeyemi", username: "@zara.studio", score: 856, verified: false, avatar: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=48&h=48&fit=crop&auto=format" }, images: ["https://images.unsplash.com/photo-1561070791-2526d30994b5?w=520&h=340&fit=crop&auto=format"], caption: "Brand identity system for Kente & Co. — a luxury textile startup from Accra. The challenge: balance deep heritage with contemporary minimalism.", tags: ["#BrandIdentity", "#LogoDesign", "#Luxury"], likes: 4120, comments: 267, shares: 198, saved: 891, timeAgo: "5h" },
+  { id: 3, type: "text", user: { name: "Emeka Nwosu", username: "@emeka.dev", score: 712, verified: false, avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=48&h=48&fit=crop&auto=format" }, caption: "Hot take: the best creative direction comes from constraint, not freedom. Every project I've shipped with tight boundaries has outlasted the open-ended ones. Constraints force clarity.", tags: ["#CreativeProcess", "#Design"], likes: 1893, comments: 412, shares: 234, saved: 167, timeAgo: "8h" },
+  { id: 4, type: "project", user: { name: "Simi Adebayo", username: "@simi.lens", score: 934, verified: true, avatar: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=48&h=48&fit=crop&auto=format" }, images: ["https://images.unsplash.com/photo-1574169208507-84376144848b?w=520&h=340&fit=crop&auto=format"], caption: "Shot for the Heritage Collection campaign — natural light, raw textures, real people. Sometimes the simplest brief yields the most honest work.", tags: ["#Photography", "#Campaign", "#Heritage"], likes: 5630, comments: 318, shares: 421, saved: 1240, timeAgo: "12h" },
+];
+
+const OPPS = [
+  { id: 1, title: "Senior Brand Designer", company: "Flutterwave", type: "Full-time", location: "Remote / Lagos", salary: "$65k–$90k", skills: ["Brand Identity", "Figma", "Motion"], logo: "https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=48&h=48&fit=crop&auto=format", posted: "2d ago", applicants: 47, match: 94 },
+  { id: 2, title: "Creative Director", company: "Paystack", type: "Contract", location: "Hybrid – Lagos", salary: "$80k–$120k", skills: ["Art Direction", "Team Lead", "Campaign"], logo: "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=48&h=48&fit=crop&auto=format", posted: "3d ago", applicants: 89, match: 88 },
+  { id: 3, title: "Visual Artist — Album Art", company: "Afrobeats Collective", type: "Collab", location: "Remote", salary: "Rev. Share", skills: ["Illustration", "Typography", "Music"], logo: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=48&h=48&fit=crop&auto=format", posted: "1d ago", applicants: 23, match: 76 },
+  { id: 4, title: "UX Designer — Fintech", company: "Carbon", type: "Freelance", location: "Remote", salary: "$40–$60/hr", skills: ["UX Research", "Figma", "Prototyping"], logo: "https://images.unsplash.com/photo-1563986768494-4dee2763ff3f?w=48&h=48&fit=crop&auto=format", posted: "Today", applicants: 12, match: 71 },
+  { id: 5, title: "Motion Designer — Social", company: "MTN Group", type: "Full-time", location: "JHB / Remote", salary: "$50k–$70k", skills: ["Motion Design", "After Effects", "Social"], logo: "https://images.unsplash.com/photo-1516321497487-e288fb19713f?w=48&h=48&fit=crop&auto=format", posted: "4d ago", applicants: 134, match: 91 },
+];
+
+const TALENTS = [
+  { name: "Simi Adebayo", username: "@simi.lens", role: "Photographer", score: 934, cover: "https://images.unsplash.com/photo-1574169208507-84376144848b?w=280&h=360&fit=crop&auto=format", avatar: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=40&h=40&fit=crop&auto=format" },
+  { name: "David Kweku", username: "@dkweku.mov", role: "Motion Designer", score: 889, cover: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=280&h=360&fit=crop&auto=format", avatar: "https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=40&h=40&fit=crop&auto=format" },
+  { name: "Fatima Al-Hassan", username: "@fatima.type", role: "Type Designer", score: 845, cover: "https://images.unsplash.com/photo-1558655146-9f40138edfeb?w=280&h=360&fit=crop&auto=format", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=40&h=40&fit=crop&auto=format" },
+  { name: "Chidi Eze", username: "@chidi.build", role: "Creative Developer", score: 812, cover: "https://images.unsplash.com/photo-1561070791-2526d30994b5?w=280&h=360&fit=crop&auto=format", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop&auto=format" },
+  { name: "Ama Boateng", username: "@ama.illus", role: "Illustrator", score: 798, cover: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=280&h=360&fit=crop&auto=format", avatar: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=40&h=40&fit=crop&auto=format" },
+  { name: "Yemi Hassan", username: "@yemi.brand", role: "Brand Strategist", score: 776, cover: "https://images.unsplash.com/photo-1600132806370-bf17e65e942f?w=280&h=360&fit=crop&auto=format", avatar: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=40&h=40&fit=crop&auto=format" },
+];
+
+const PORTFOLIO = [
+  { id: 1, image: "https://images.unsplash.com/photo-1561070791-2526d30994b5?w=300&h=300&fit=crop&auto=format", title: "Kente & Co.", category: "Brand Identity", likes: 2341 },
+  { id: 2, image: "https://images.unsplash.com/photo-1558655146-9f40138edfeb?w=300&h=300&fit=crop&auto=format", title: "Woven App", category: "UI/UX", likes: 1876 },
+  { id: 3, image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300&h=300&fit=crop&auto=format", title: "Motion Reel 2024", category: "Motion", likes: 3102 },
+  { id: 4, image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=300&h=300&fit=crop&auto=format", title: "Afrique Cover", category: "Editorial", likes: 4567 },
+  { id: 5, image: "https://images.unsplash.com/photo-1600132806370-bf17e65e942f?w=300&h=300&fit=crop&auto=format", title: "Harmattan Series", category: "Poster", likes: 2198 },
+  { id: 6, image: "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=300&h=300&fit=crop&auto=format", title: "Startup Sprint", category: "Brand Identity", likes: 1654 },
+  { id: 7, image: "https://images.unsplash.com/photo-1626785774573-4b799315345d?w=300&h=300&fit=crop&auto=format", title: "Neon Lagos Type", category: "Typography", likes: 2890 },
+  { id: 8, image: "https://images.unsplash.com/photo-1558591710-4b4a1ae0f994?w=300&h=300&fit=crop&auto=format", title: "Heritage Campaign", category: "Campaign", likes: 3341 },
+  { id: 9, image: "https://images.unsplash.com/photo-1614854262318-831574f15f1f?w=300&h=300&fit=crop&auto=format", title: "Studio Rebrand", category: "Brand Identity", likes: 1987 },
+];
+
+const SUGGESTED = [
+  { name: "Tolu Bello", username: "@tolu.vis", score: 943, role: "Photographer", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=40&h=40&fit=crop&auto=format" },
+  { name: "Jide Okafor", username: "@jide.type", score: 877, role: "Typographer", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&auto=format" },
+  { name: "Ngozi Eze", username: "@ngozi.art", score: 821, role: "Illustrator", avatar: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=40&h=40&fit=crop&auto=format" },
+];
+
+const STORIES = [
+  { id: "me", name: "Your Story", avatar: ME.avatar, seen: true, isMe: true },
+  { id: "1", name: "Kofi", avatar: "https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=56&h=56&fit=crop&auto=format", seen: false },
+  { id: "2", name: "Zara", avatar: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=56&h=56&fit=crop&auto=format", seen: false },
+  { id: "3", name: "Simi", avatar: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=56&h=56&fit=crop&auto=format", seen: true },
+  { id: "4", name: "David", avatar: "https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=56&h=56&fit=crop&auto=format", seen: false },
+  { id: "5", name: "Fatima", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=56&h=56&fit=crop&auto=format", seen: false },
+];
+
+const NOTIFICATIONS = [
+  { id: 1, type: "like", user: "Kofi Mensah", avatar: "https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=40&h=40&fit=crop&auto=format", text: "liked your Brand Identity project", time: "2m", unread: true },
+  { id: 2, type: "follow", user: "Zara Adeyemi", avatar: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=40&h=40&fit=crop&auto=format", text: "started following you", time: "15m", unread: true },
+  { id: 3, type: "opportunity", user: "Flutterwave", avatar: "https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=40&h=40&fit=crop&auto=format", text: "shortlisted you for Senior Brand Designer", time: "1h", unread: true },
+  { id: 4, type: "comment", user: "Emeka Nwosu", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop&auto=format", text: "commented on your motion reel: 'This is next level 🔥'", time: "2h", unread: false },
+  { id: 5, type: "collab", user: "Ama Boateng", avatar: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=40&h=40&fit=crop&auto=format", text: "invited you to join the Visual Africa project", time: "3h", unread: false },
+  { id: 6, type: "like", user: "Tolu Bello", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=40&h=40&fit=crop&auto=format", text: "saved your Woven App showcase", time: "5h", unread: false },
+];
+
+const CONVERSATIONS = [
+  { id: 1, user: "Kofi Mensah", avatar: "https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=44&h=44&fit=crop&auto=format", lastMsg: "Your motion style is incredible 🔥", time: "2m", unread: 2, online: true },
+  { id: 2, user: "Zara Adeyemi", avatar: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=44&h=44&fit=crop&auto=format", lastMsg: "Can we collaborate on the Kente project?", time: "1h", unread: 0, online: true },
+  { id: 3, user: "Flutterwave HR", avatar: "https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=44&h=44&fit=crop&auto=format", lastMsg: "Thank you for your application. We would love to...", time: "2h", unread: 1, online: false },
+  { id: 4, user: "Simi Adebayo", avatar: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=44&h=44&fit=crop&auto=format", lastMsg: "Shooting in Accra next week — want to join?", time: "1d", unread: 0, online: false },
+  { id: 5, user: "David Kweku", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=44&h=44&fit=crop&auto=format", lastMsg: "Check this After Effects plugin — game changer", time: "2d", unread: 0, online: true },
+];
+
+const CHAT_MESSAGES = [
+  { id: 1, from: "other" as const, text: "Hey! I saw your motion reel — absolutely incredible work 🔥", time: "10:31 AM" },
+  { id: 2, from: "me" as const, text: "Thank you so much! I've been experimenting with fluid transitions for months now.", time: "10:33 AM" },
+  { id: 3, from: "other" as const, text: "It shows. The timing on those brand state transitions is *perfect*. How did you handle the easing?", time: "10:34 AM" },
+  { id: 4, from: "me" as const, text: "Custom cubic bezier curves mostly. I use a spreadsheet to preview easing before I touch After Effects 😅", time: "10:36 AM" },
+  { id: 5, from: "other" as const, text: "That's genius. Would love to collaborate sometime — I'm working on a rebrand for a music label right now and the motion language needs to be on another level.", time: "10:38 AM" },
+  { id: 6, from: "me" as const, text: "I'm definitely interested! Send me the brief and let's see what we can build together.", time: "10:39 AM" },
+];
+
+const COMMENTS = [
+  { id: 1, user: "Tolu Bello", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=36&h=36&fit=crop&auto=format", text: "This is absolutely stunning work. The typography system alone is worth studying for hours.", time: "1h", likes: 24 },
+  { id: 2, user: "David Kweku", avatar: "https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=36&h=36&fit=crop&auto=format", text: "How long did the brand discovery phase take? The direction feels so confident.", time: "2h", likes: 18 },
+  { id: 3, user: "Ngozi Eze", avatar: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=36&h=36&fit=crop&auto=format", text: "Kente & Co. is lucky to have you. This is what the next generation of African luxury branding should look like.", time: "3h", likes: 41 },
+];
+
+const EVENTS = [
+  { id: 1, title: "African Design Summit 2025", type: "Conference", date: "Aug 14–16", location: "Lagos, Nigeria", cover: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600&h=300&fit=crop&auto=format", attendees: 1247, virtual: false, rsvped: false, price: "Free" },
+  { id: 2, title: "Motion Design Masterclass", type: "Workshop", date: "Jul 28", location: "Online", cover: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&h=300&fit=crop&auto=format", attendees: 340, virtual: true, rsvped: true, price: "Free" },
+  { id: 3, title: "Creatives Networking Night", type: "Networking", date: "Jul 19", location: "Accra, Ghana", cover: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=600&h=300&fit=crop&auto=format", attendees: 89, virtual: false, rsvped: false, price: "GHS 50" },
+  { id: 4, title: "Brand Strategy Intensive", type: "Workshop", date: "Aug 3", location: "Online", cover: "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=600&h=300&fit=crop&auto=format", attendees: 220, virtual: true, rsvped: false, price: "₦15,000" },
+];
+
+// ─── Utilities ──────────────────────────────────────────────────────────────
+
+const fmtNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+const scoreColor = (s: number) => s >= 900 ? "#10B981" : s >= 800 ? "#7C3AED" : s >= 700 ? "#F59E0B" : "#6B7280";
+const TYPE_BADGE: Record<string, string> = {
+  "Full-time": "bg-violet-950 text-violet-300 border-violet-500/20",
+  "Freelance": "bg-amber-950 text-amber-300 border-amber-500/20",
+  "Contract": "bg-blue-950 text-blue-300 border-blue-500/20",
+  "Collab": "bg-emerald-950 text-emerald-300 border-emerald-500/20",
+};
+const NOTIF_ICON: Record<string, { icon: LucideIcon; color: string }> = {
+  like: { icon: Heart, color: "text-rose-400" },
+  follow: { icon: Users, color: "text-violet-400" },
+  opportunity: { icon: Briefcase, color: "text-amber-400" },
+  comment: { icon: MessageCircle, color: "text-blue-400" },
+  collab: { icon: Users, color: "text-emerald-400" },
+};
+
+// ─── Animated Counter ───────────────────────────────────────────────────────
+
+function AnimatedCounter({ value, delay = 0 }: { value: number; delay?: number }) {
+  const [current, setCurrent] = useState(0);
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      let frame: number;
+      const startTime = performance.now();
+      const duration = 1300;
+      const tick = (now: number) => {
+        const progress = Math.min((now - startTime) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        setCurrent(Math.round(eased * value));
+        if (progress < 1) frame = requestAnimationFrame(tick);
+      };
+      frame = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(frame);
+    }, delay * 1000);
+    return () => clearTimeout(timeout);
+  }, [value, delay]);
+  return <>{current}</>;
+}
+
+// ─── Score Ring ─────────────────────────────────────────────────────────────
+
+function ScoreRing({ score, size = 72 }: { score: number; size?: number }) {
+  const sw = 5;
+  const r = (size - sw * 2) / 2;
+  const circ = 2 * Math.PI * r;
+  const col = scoreColor(score);
+  const pct = score / 1000;
+  return (
+    <svg width={size} height={size} style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={sw} />
+      <motion.circle
+        cx={size / 2} cy={size / 2} r={r}
+        fill="none" stroke={col} strokeWidth={sw}
+        strokeLinecap="round"
+        strokeDasharray={circ}
+        initial={{ strokeDashoffset: circ }}
+        animate={{ strokeDashoffset: circ * (1 - pct) }}
+        transition={{ duration: 1.4, delay: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
+      />
+    </svg>
+  );
+}
+
+// ─── Story Bar ──────────────────────────────────────────────────────────────
+
+function StoryBar() {
+  const [seen, setSeen] = useState<Set<string>>(new Set(STORIES.filter(s => s.seen).map(s => s.id)));
+  return (
+    <motion.div
+      variants={staggerContainer}
+      initial="initial"
+      animate="animate"
+      className="flex gap-4 overflow-x-auto scrollbar-hide pb-1 mb-5"
+    >
+      {STORIES.map((s, i) => (
+        <motion.button
+          key={s.id}
+          variants={staggerItem}
+          whileHover={{ scale: 1.06 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => {
+            setSeen(p => new Set([...p, s.id]));
+            if (!s.isMe) toast(`Viewing ${s.name}"s story`, { description: "Story mode coming soon ✦", icon: "📖" });
+          }}
+          className="flex flex-col items-center gap-1.5 flex-shrink-0"
+        >
+          <div className={`w-14 h-14 rounded-full p-[2.5px] ${seen.has(s.id) ? "bg-[#2A2A3A]" : "bg-gradient-to-tr from-violet-600 via-pink-500 to-amber-400"}`}>
+            <div className="w-full h-full rounded-full overflow-hidden bg-[#0F0F1C] p-0.5">
+              <img src={s.avatar} alt={s.name} className="w-full h-full rounded-full object-cover" />
+            </div>
+          </div>
+          {s.isMe && (
+            <div className="relative -mt-5 -mr-1 self-end">
+              <div className="w-4 h-4 rounded-full bg-violet-600 border-2 border-[#080810] flex items-center justify-center">
+                <Plus size={9} className="text-white" />
+              </div>
+            </div>
+          )}
+          <span className="text-[10px] text-[#7B7A9A] truncate max-w-[52px]">{s.name}</span>
+        </motion.button>
+      ))}
+    </motion.div>
+  );
+}
+
+// ─── Nav Item ───────────────────────────────────────────────────────────────
+
+function NavItem({ icon: Icon, label, active, onClick, badge }: {
+  icon: LucideIcon; label: string; active?: boolean; onClick?: () => void; badge?: number;
+}) {
+  return (
+    <motion.button
+      onClick={onClick}
+      whileHover={{ x: 2 }}
+      whileTap={{ scale: 0.97 }}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 group relative
+        ${active ? "bg-violet-600/20 text-violet-300" : "text-[#7B7A9A] hover:bg-white/5 hover:text-white"}`}
+    >
+      {active && (
+        <motion.span
+          layoutId="nav-indicator"
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-violet-400 rounded-full"
+          transition={{ type: "spring", stiffness: 500, damping: 35 }}
+        />
+      )}
+      <Icon size={18} className={`transition-colors ${active ? "text-violet-400" : "text-[#7B7A9A] group-hover:text-white"}`} />
+      <span>{label}</span>
+      {badge != null && (
+        <motion.span
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="ml-auto bg-violet-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none"
+        >
+          {badge}
+        </motion.span>
+      )}
+    </motion.button>
+  );
+}
+
+// ─── Post Card ──────────────────────────────────────────────────────────────
+
+function PostCard({ post, liked, saved, onLike, onSave, onComment }: {
+  post: Post; liked: boolean; saved: boolean;
+  onLike: (e: React.MouseEvent) => void; onSave: () => void; onComment: () => void;
+}) {
+  const [showShare, setShowShare] = useState(false);
+  return (
+    <motion.article
+      variants={staggerItem}
+      className="bg-[#0F0F1C] border border-white/[0.06] rounded-2xl overflow-hidden mb-4"
+      whileHover={{ borderColor: "rgba(255,255,255,0.1)" }}
+      transition={{ duration: 0.2 }}
+    >
+      <div className="flex items-center gap-3 p-4 pb-3">
+        <motion.img
+          whileHover={{ scale: 1.06 }}
+          src={post.user.avatar} alt={post.user.name}
+          className="w-10 h-10 rounded-full object-cover flex-shrink-0 bg-[#1A1A2E] cursor-pointer"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold text-white">{post.user.name}</span>
+            {post.user.verified && <CheckCircle size={13} className="text-violet-400 flex-shrink-0" />}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#7B7A9A]">{post.user.username}</span>
+            <span className="text-[#3A3A5A]">·</span>
+            <span className="text-xs text-[#7B7A9A]">{post.timeAgo}</span>
+          </div>
+        </div>
+        <motion.div
+          whileHover={{ scale: 1.05 }}
+          className="flex items-center gap-1.5 bg-violet-950/60 px-2 py-1 rounded-lg border border-violet-500/20 cursor-pointer"
+        >
+          <Zap size={11} className="text-violet-400" />
+          <span className="text-xs font-bold text-violet-300">{post.user.score}</span>
+        </motion.div>
+        <motion.button whileTap={{ scale: 0.85 }} className="text-[#4A4A6A] hover:text-white transition-colors">
+          <MoreHorizontal size={18} />
+        </motion.button>
+      </div>
+
+      <div className="px-4 pb-3">
+        <p className="text-sm text-[#CCCCE0] leading-relaxed">{post.caption}</p>
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {post.tags.map(tag => (
+            <motion.span
+              key={tag}
+              whileHover={{ scale: 1.04 }}
+              className="text-xs text-violet-400 hover:text-violet-300 cursor-pointer transition-colors"
+            >{tag}</motion.span>
+          ))}
+        </div>
+      </div>
+
+      {post.type === "reel" && (
+        <div className="relative mx-4 mb-3 rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "4/5", maxHeight: 380 }}>
+          <img src={post.thumbnail} alt="Reel" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          <motion.button
+            className="absolute inset-0 flex items-center justify-center group/play"
+            whileHover="hover"
+          >
+            <motion.div
+              variants={{ hover: { scale: 1.1 } }}
+              className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center"
+            >
+              <Play size={22} className="text-white ml-1" fill="white" />
+            </motion.div>
+          </motion.button>
+          <div className="absolute bottom-3 left-3 bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded-md">
+            <span className="text-white text-xs font-medium tracking-wide">REEL · 1:32</span>
+          </div>
+        </div>
+      )}
+
+      {post.type === "project" && post.images.map((img, i) => (
+        <motion.div key={i} whileHover={{ scale: 1.005 }} className="mx-4 mb-3 rounded-xl overflow-hidden bg-[#0A0A18] cursor-pointer">
+          <img src={img} alt="Project" className="w-full object-cover" style={{ maxHeight: 300 }} />
+        </motion.div>
+      ))}
+
+      <div className="flex items-center gap-1 px-4 py-3 border-t border-white/[0.04]">
+        <motion.button
+          onClick={onLike}
+          whileTap={{ scale: 0.85 }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-sm
+            ${liked ? "text-rose-400 bg-rose-950/40" : "text-[#7B7A9A] hover:text-rose-400 hover:bg-rose-950/20"}`}
+        >
+          <motion.span
+            animate={liked ? { scale: [1, 1.4, 1] } : { scale: 1 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+          >
+            <Heart size={15} fill={liked ? "currentColor" : "none"} />
+          </motion.span>
+          <span>{fmtNum(post.likes + (liked ? 1 : 0))}</span>
+        </motion.button>
+        <motion.button
+          onClick={onComment}
+          whileTap={{ scale: 0.85 }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-[#7B7A9A] hover:text-white hover:bg-white/5 transition-all"
+        >
+          <MessageCircle size={15} />
+          <span>{fmtNum(post.comments)}</span>
+        </motion.button>
+        <motion.button
+          onClick={() => {
+            setShowShare(!showShare);
+            toast("Link copied!", { description: "Share this post with your network", icon: "🔗" });
+          }}
+          whileTap={{ scale: 0.85 }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-[#7B7A9A] hover:text-white hover:bg-white/5 transition-all"
+        >
+          <Share2 size={15} />
+          <span>{fmtNum(post.shares)}</span>
+        </motion.button>
+        <motion.button
+          onClick={onSave}
+          whileTap={{ scale: 0.85 }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ml-auto transition-all
+            ${saved ? "text-amber-400 bg-amber-950/40" : "text-[#7B7A9A] hover:text-amber-400 hover:bg-amber-950/20"}`}
+        >
+          <motion.span
+            animate={saved ? { scale: [1, 1.35, 1] } : { scale: 1 }}
+            transition={{ duration: 0.32, ease: "easeOut" }}
+          >
+            <Bookmark size={15} fill={saved ? "currentColor" : "none"} />
+          </motion.span>
+          <span>{fmtNum(post.saved + (saved ? 1 : 0))}</span>
+        </motion.button>
+      </div>
+    </motion.article>
+  );
+}
+
+// ─── Floating Hearts ────────────────────────────────────────────────────────
+
+interface FloatingHeart { id: number; x: number; y: number; }
+
+function FloatingHearts({ hearts }: { hearts: FloatingHeart[] }) {
+  return (
+    <>
+      {hearts.map(h => (
+        <motion.div
+          key={h.id}
+          className="fixed pointer-events-none text-rose-400 z-[200]"
+          style={{ left: h.x, top: h.y }}
+          initial={{ opacity: 1, scale: 0.6, y: 0 }}
+          animate={{ opacity: 0, scale: 1.6, y: -70 }}
+          transition={{ duration: 0.9, ease: "easeOut" }}
+        >
+          <Heart size={20} fill="currentColor" />
+        </motion.div>
+      ))}
+    </>
+  );
+}
+
+// ─── Notifications Panel ────────────────────────────────────────────────────
+
+function NotificationsPanel({ onClose }: { onClose: () => void }) {
+  const [notes, setNotes] = useState(NOTIFICATIONS);
+  const markAll = () => setNotes(p => p.map(n => ({ ...n, unread: false })));
+  return (
+    <motion.div
+      variants={slideFromRight}
+      initial="initial" animate="animate" exit="exit"
+      className="fixed right-0 top-0 h-full w-96 bg-[#0C0C1E] border-l border-white/[0.07] z-50 flex flex-col shadow-2xl"
+    >
+      <div className="flex items-center justify-between p-5 border-b border-white/[0.06]">
+        <div>
+          <h2 className="font-bold text-white" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Notifications</h2>
+          <p className="text-xs text-[#7B7A9A] mt-0.5">{notes.filter(n => n.unread).length} unread</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={markAll}
+            className="text-xs text-violet-400 hover:text-violet-300 px-2 py-1 rounded-lg hover:bg-violet-950/40 transition-all"
+          >
+            Mark all read
+          </motion.button>
+          <motion.button whileTap={{ scale: 0.85 }} onClick={onClose} className="text-[#7B7A9A] hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5">
+            <X size={18} />
+          </motion.button>
+        </div>
+      </div>
+      <motion.div variants={staggerContainer} initial="initial" animate="animate" className="flex-1 overflow-y-auto scrollbar-hide divide-y divide-white/[0.04]">
+        {notes.map((n) => {
+          const { icon: NIcon, color } = NOTIF_ICON[n.type] ?? NOTIF_ICON.like;
+          return (
+            <motion.div
+              key={n.id}
+              variants={staggerItem}
+              whileHover={{ backgroundColor: "rgba(255,255,255,0.03)" }}
+              onClick={() => setNotes(p => p.map(x => x.id === n.id ? { ...x, unread: false } : x))}
+              className={`flex items-start gap-3 p-4 cursor-pointer transition-colors relative ${n.unread ? "bg-violet-950/10" : ""}`}
+            >
+              {n.unread && <span className="absolute left-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-violet-500 rounded-full" />}
+              <div className="relative flex-shrink-0">
+                <img src={n.avatar} alt={n.user} className="w-10 h-10 rounded-full object-cover bg-[#1A1A2E]" />
+                <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#0C0C1E] border border-white/10 flex items-center justify-center`}>
+                  <NIcon size={11} className={color} />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-[#CCCCE0] leading-relaxed">
+                  <span className="font-semibold text-white">{n.user}</span> {n.text}
+                </p>
+                <p className="text-xs text-[#7B7A9A] mt-1">{n.time} ago</p>
+              </div>
+            </motion.div>
+          );
+        })}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Comments Panel ─────────────────────────────────────────────────────────
+
+function CommentsPanel({ postId, onClose }: { postId: number; onClose: () => void }) {
+  const [comment, setComment] = useState("");
+  const [localComments, setLocalComments] = useState(COMMENTS);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const submit = () => {
+    if (!comment.trim()) return;
+    const nc = { id: Date.now(), user: ME.name, avatar: ME.avatar, text: comment, time: "just now", likes: 0 };
+    setLocalComments(p => [nc, ...p]);
+    setComment("");
+    toast("Comment posted!", { icon: "💬" });
+  };
+
+  return (
+    <motion.div
+      variants={slideFromRight}
+      initial="initial" animate="animate" exit="exit"
+      className="fixed right-0 top-0 h-full w-96 bg-[#0C0C1E] border-l border-white/[0.07] z-50 flex flex-col shadow-2xl"
+    >
+      <div className="flex items-center gap-3 p-5 border-b border-white/[0.06]">
+        <motion.button whileTap={{ scale: 0.85 }} onClick={onClose} className="text-[#7B7A9A] hover:text-white transition-colors">
+          <ArrowLeft size={18} />
+        </motion.button>
+        <h2 className="font-bold text-white" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Comments</h2>
+        <span className="text-xs text-[#7B7A9A] ml-auto">{localComments.length} comments</span>
+      </div>
+      <motion.div variants={staggerContainer} initial="initial" animate="animate" className="flex-1 overflow-y-auto scrollbar-hide divide-y divide-white/[0.04] p-4 space-y-4">
+        {localComments.map(c => (
+          <motion.div key={c.id} variants={staggerItem} className="flex gap-3">
+            <img src={c.avatar} alt={c.user} className="w-8 h-8 rounded-full object-cover flex-shrink-0 bg-[#1A1A2E]" />
+            <div className="flex-1">
+              <div className="bg-white/[0.04] rounded-xl px-3 py-2.5">
+                <p className="text-xs font-semibold text-white mb-1">{c.user}</p>
+                <p className="text-sm text-[#CCCCE0] leading-relaxed">{c.text}</p>
+              </div>
+              <div className="flex items-center gap-4 mt-1.5 px-1">
+                <span className="text-[11px] text-[#7B7A9A]">{c.time}</span>
+                <motion.button whileTap={{ scale: 0.85 }} className="text-[11px] text-[#7B7A9A] hover:text-rose-400 flex items-center gap-1 transition-colors">
+                  <Heart size={10} />
+                  <span>{c.likes}</span>
+                </motion.button>
+                <button className="text-[11px] text-[#7B7A9A] hover:text-white transition-colors">Reply</button>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </motion.div>
+      <div className="p-4 border-t border-white/[0.06]">
+        <div className="flex items-center gap-2 bg-white/5 border border-white/[0.08] rounded-xl px-3 py-2.5 focus-within:border-violet-500/40 transition-colors">
+          <img src={ME.avatar} alt="You" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+          <input
+            ref={inputRef}
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && submit()}
+            placeholder="Add a comment..."
+            className="flex-1 bg-transparent text-sm text-white placeholder-[#7B7A9A] outline-none"
+          />
+          <motion.button
+            whileTap={{ scale: 0.85 }}
+            onClick={submit}
+            className={`transition-colors ${comment.trim() ? "text-violet-400 hover:text-violet-300" : "text-[#4A4A6A]"}`}
+          >
+            <Send size={15} />
+          </motion.button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Create Modal ────────────────────────────────────────────────────────────
+
+function CreateModal({ onClose }: { onClose: () => void }) {
+  const [contentType, setContentType] = useState<"reel" | "post" | "project">("post");
+  const [caption, setCaption] = useState("");
+  const [tags, setTags] = useState("");
+  const types = [
+    { key: "post" as const, icon: Image, label: "Post" },
+    { key: "reel" as const, icon: Film, label: "Reel" },
+    { key: "project" as const, icon: FolderOpen, label: "Project" },
+  ];
+
+  const publish = () => {
+    onClose();
+    setTimeout(() => toast.success("Published!", { description: "Your content is live on the feed ✦", icon: "🚀" }), 200);
+  };
+
+  return (
+    <motion.div variants={backdropVars} initial="initial" animate="animate" exit="exit"
+      onClick={onClose}
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+    >
+      <motion.div
+        variants={scaleModal} initial="initial" animate="animate" exit="exit"
+        onClick={e => e.stopPropagation()}
+        className="w-full max-w-md bg-[#0F0F1C] border border-white/[0.08] rounded-2xl overflow-hidden shadow-2xl"
+      >
+        <div className="flex items-center justify-between p-5 border-b border-white/[0.06]">
+          <h2 className="font-bold text-white" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Create</h2>
+          <motion.button whileTap={{ scale: 0.85 }} onClick={onClose} className="text-[#7B7A9A] hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5">
+            <X size={18} />
+          </motion.button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Type selector */}
+          <div className="flex gap-2 bg-[#0A0A18] p-1 rounded-xl">
+            {types.map(({ key, icon: Icon, label }) => (
+              <motion.button
+                key={key}
+                onClick={() => setContentType(key)}
+                whileTap={{ scale: 0.95 }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all
+                  ${contentType === key ? "bg-violet-600 text-white shadow-lg shadow-violet-900/40" : "text-[#7B7A9A] hover:text-white"}`}
+              >
+                <Icon size={14} />
+                {label}
+              </motion.button>
+            ))}
+          </div>
+
+          {/* Upload area */}
+          <motion.div
+            whileHover={{ borderColor: "rgba(124,58,237,0.4)", backgroundColor: "rgba(124,58,237,0.04)" }}
+            className="border-2 border-dashed border-white/10 rounded-xl p-8 text-center cursor-pointer transition-colors"
+          >
+            <motion.div whileHover={{ scale: 1.05 }} className="inline-flex flex-col items-center gap-2">
+              {contentType === "reel" ? <Video size={28} className="text-violet-400" /> :
+               contentType === "project" ? <FolderOpen size={28} className="text-violet-400" /> :
+               <Image size={28} className="text-violet-400" />}
+              <p className="text-sm font-medium text-white">Drop files here or click to upload</p>
+              <p className="text-xs text-[#7B7A9A]">
+                {contentType === "reel" ? "MP4, MOV up to 500MB" : "JPG, PNG, PDF up to 50MB"}
+              </p>
+            </motion.div>
+          </motion.div>
+
+          {/* Caption */}
+          <div className="bg-white/5 border border-white/[0.06] rounded-xl p-3 focus-within:border-violet-500/40 transition-colors">
+            <textarea
+              value={caption}
+              onChange={e => setCaption(e.target.value)}
+              placeholder={`Tell the story behind this ${contentType}...`}
+              className="w-full bg-transparent text-sm text-white placeholder-[#7B7A9A] outline-none resize-none"
+              rows={3}
+            />
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/[0.06]">
+              <div className="flex gap-2">
+                <motion.button whileTap={{ scale: 0.85 }} className="text-[#7B7A9A] hover:text-violet-400 transition-colors"><AtSign size={16} /></motion.button>
+                <motion.button whileTap={{ scale: 0.85 }} className="text-[#7B7A9A] hover:text-violet-400 transition-colors"><Hash size={16} /></motion.button>
+                <motion.button whileTap={{ scale: 0.85 }} className="text-[#7B7A9A] hover:text-violet-400 transition-colors"><Smile size={16} /></motion.button>
+              </div>
+              <span className="text-[11px] text-[#4A4A6A]">{caption.length}/500</span>
+            </div>
+          </div>
+
+          {/* Tags */}
+          <input
+            value={tags}
+            onChange={e => setTags(e.target.value)}
+            placeholder="#BrandIdentity #Motion #Design"
+            className="w-full bg-white/5 border border-white/[0.06] rounded-xl px-3 py-2.5 text-sm text-violet-300 placeholder-[#4A4A6A] outline-none focus:border-violet-500/40 transition-colors"
+          />
+
+          <motion.button
+            onClick={publish}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.97 }}
+            className="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white text-sm font-bold rounded-xl transition-colors shadow-lg shadow-violet-900/40"
+          >
+            Publish {contentType === "post" ? "Post" : contentType === "reel" ? "Reel" : "Project"}
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Search Overlay ──────────────────────────────────────────────────────────
+
+function SearchOverlay({ onClose }: { onClose: () => void }) {
+  const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<"people" | "work" | "opportunities">("people");
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const filtered = query.trim()
+    ? TALENTS.filter(t => t.name.toLowerCase().includes(query.toLowerCase()) || t.role.toLowerCase().includes(query.toLowerCase()))
+    : TALENTS;
+
+  return (
+    <motion.div variants={backdropVars} initial="initial" animate="animate" exit="exit"
+      className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100]"
+    >
+      <motion.div variants={slideFromTop} initial="initial" animate="animate" exit="exit"
+        className="bg-[#0C0C1E] border-b border-white/[0.06] shadow-2xl"
+      >
+        <div className="max-w-2xl mx-auto px-6 py-4 flex items-center gap-3">
+          <Search size={18} className="text-violet-400 flex-shrink-0" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search creators, projects, opportunities..."
+            className="flex-1 bg-transparent text-base text-white placeholder-[#7B7A9A] outline-none"
+          />
+          <motion.button whileTap={{ scale: 0.85 }} onClick={onClose} className="text-[#7B7A9A] hover:text-white transition-colors flex items-center gap-1">
+            <X size={18} />
+          </motion.button>
+        </div>
+        <div className="max-w-2xl mx-auto px-6 pb-3 flex gap-1">
+          {(["people", "work", "opportunities"] as const).map(t => (
+            <motion.button key={t} onClick={() => setTab(t)} whileTap={{ scale: 0.95 }}
+              className={`px-4 py-1 text-xs font-semibold capitalize rounded-full transition-all
+                ${tab === t ? "bg-violet-600 text-white" : "text-[#7B7A9A] hover:text-white"}`}>
+              {t}
+            </motion.button>
+          ))}
+        </div>
+      </motion.div>
+      <div className="max-w-2xl mx-auto px-6 py-6">
+        {!query.trim() && (
+          <div className="mb-6">
+            <p className="text-xs font-bold text-[#7B7A9A] tracking-widest mb-3">TRENDING SEARCHES</p>
+            <div className="flex flex-wrap gap-2">
+              {["Brand Identity", "Motion Design", "UX/UI", "Photography", "Illustration", "AfroDesign", "Type Design"].map(s => (
+                <motion.button
+                  key={s} whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+                  onClick={() => setQuery(s)}
+                  className="px-3 py-1.5 text-sm bg-white/5 hover:bg-violet-950/60 text-[#CCCCE0] hover:text-violet-300 border border-white/[0.06] hover:border-violet-500/30 rounded-full transition-all"
+                >
+                  {s}
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        )}
+        {tab === "people" && (
+          <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-2 gap-3">
+            {filtered.map(t => (
+              <motion.div key={t.username} variants={staggerItem} whileHover={{ scale: 1.02 }}
+                className="flex items-center gap-3 bg-[#0F0F1C] border border-white/[0.06] rounded-xl p-3 cursor-pointer hover:border-violet-500/30 transition-all"
+              >
+                <img src={t.avatar} alt={t.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{t.name}</p>
+                  <p className="text-xs text-[#7B7A9A]">{t.role}</p>
+                </div>
+                <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+                  <Zap size={10} className="text-violet-400" />
+                  <span className="text-xs text-violet-400 font-bold">{t.score}</span>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+        {tab === "opportunities" && (
+          <motion.div variants={staggerContainer} initial="initial" animate="animate" className="space-y-3">
+            {OPPS.map(o => (
+              <motion.div key={o.id} variants={staggerItem} whileHover={{ scale: 1.005 }}
+                className="flex items-center gap-3 bg-[#0F0F1C] border border-white/[0.06] rounded-xl p-4 cursor-pointer hover:border-violet-500/30 transition-all"
+              >
+                <img src={o.logo} alt={o.company} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">{o.title}</p>
+                  <p className="text-xs text-[#7B7A9A]">{o.company} · {o.salary}</p>
+                </div>
+                <ChevronRight size={14} className="text-[#4A4A6A] flex-shrink-0" />
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+        {tab === "work" && (
+          <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-3 gap-3">
+            {PORTFOLIO.map(p => (
+              <motion.div key={p.id} variants={staggerItem} whileHover={{ scale: 1.03 }} className="rounded-xl overflow-hidden cursor-pointer aspect-square">
+                <img src={p.image} alt={p.title} className="w-full h-full object-cover" />
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Feed View ──────────────────────────────────────────────────────────────
+
+function FeedView({ onOpenComments }: { onOpenComments: (id: number) => void }) {
+  const [likes, setLikes] = useState<Set<number>>(new Set());
+  const [saves, setSaves] = useState<Set<number>>(new Set());
+  const [feedTab, setFeedTab] = useState<"for-you" | "following" | "trending">("for-you");
+  const [floatingHearts, setFloatingHearts] = useState<FloatingHeart[]>([]);
+
+  const toggle = (set: Set<number>, id: number) => {
+    const n = new Set(set);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  };
+
+  const handleLike = (postId: number, e: React.MouseEvent) => {
+    if (!likes.has(postId)) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const id = Date.now();
+      setFloatingHearts(p => [...p, { id, x: rect.x + rect.width / 2 - 10, y: rect.y }]);
+      setTimeout(() => setFloatingHearts(p => p.filter(h => h.id !== id)), 1000);
+    }
+    setLikes(p => toggle(p, postId));
+  };
+
+  return (
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="max-w-xl mx-auto py-6 px-4">
+      <FloatingHearts hearts={floatingHearts} />
+      <StoryBar />
+      <div className="flex gap-1 mb-6 bg-[#0F0F1C] border border-white/[0.06] p-1 rounded-xl">
+        {(["for-you", "following", "trending"] as const).map(t => (
+          <motion.button
+            key={t} onClick={() => setFeedTab(t)}
+            whileTap={{ scale: 0.95 }}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg capitalize transition-all
+              ${feedTab === t ? "bg-violet-600 text-white shadow-lg shadow-violet-900/40" : "text-[#7B7A9A] hover:text-white"}`}
+          >
+            {t === "for-you" ? "For You" : t === "following" ? "Following" : "Trending"}
+          </motion.button>
+        ))}
+      </div>
+      <motion.div variants={staggerContainer} initial="initial" animate="animate">
+        {POSTS.map(post => (
+          <PostCard
+            key={post.id} post={post}
+            liked={likes.has(post.id)} saved={saves.has(post.id)}
+            onLike={(e) => handleLike(post.id, e)}
+            onSave={() => setSaves(p => toggle(p, post.id))}
+            onComment={() => onOpenComments(post.id)}
+          />
+        ))}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Explore View ───────────────────────────────────────────────────────────
+
+function ExploreView() {
+  const cats = ["All", "Design", "Photography", "Motion", "Music", "Development", "Fashion", "Content"];
+  const [cat, setCat] = useState("All");
+  const [followed, setFollowed] = useState<Set<string>>(new Set());
+
+  return (
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="py-6 px-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
+          Discover Talent
+        </h2>
+        <p className="text-sm text-[#7B7A9A] mb-4">Find creators matched to your world</p>
+        <div className="flex gap-2 flex-wrap">
+          {cats.map(c => (
+            <motion.button
+              key={c} onClick={() => setCat(c)}
+              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.95 }}
+              className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all
+                ${cat === c ? "bg-violet-600 text-white shadow-lg shadow-violet-900/40" : "bg-white/5 text-[#7B7A9A] hover:bg-white/10 hover:text-white border border-white/[0.06]"}`}
+            >{c}</motion.button>
+          ))}
+        </div>
+      </div>
+      <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        {TALENTS.map(t => (
+          <motion.div key={t.username} variants={staggerItem} className="group cursor-pointer">
+            <motion.div
+              whileHover={{ y: -4 }}
+              transition={{ type: "spring", stiffness: 300, damping: 24 }}
+              className="relative rounded-2xl overflow-hidden bg-[#0F0F1C] border border-white/[0.06] hover:border-violet-500/30 transition-colors"
+            >
+              <div className="overflow-hidden" style={{ aspectRatio: "3/4" }}>
+                <motion.img
+                  src={t.cover} alt={t.name}
+                  className="w-full h-full object-cover"
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ duration: 0.5 }}
+                />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 p-4">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-white font-semibold text-sm">{t.name}</p>
+                    <p className="text-white/60 text-xs mt-0.5">{t.role}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <div className="flex items-center gap-1 bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                      <Zap size={10} className="text-violet-400" />
+                      <span className="text-xs font-bold text-white">{t.score}</span>
+                    </div>
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => {
+                        setFollowed(p => { const n = new Set(p); n.has(t.username) ? n.delete(t.username) : n.add(t.username); return n; });
+                        if (!followed.has(t.username)) toast(`Following ${t.name}`, { icon: "✨" });
+                      }}
+                      className={`text-xs font-bold px-3 py-1 rounded-lg transition-all ${followed.has(t.username) ? "bg-white/20 text-white" : "bg-violet-600 hover:bg-violet-500 text-white"}`}
+                    >
+                      {followed.has(t.username) ? "Following" : "Follow"}
+                    </motion.button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        ))}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Opportunities View ─────────────────────────────────────────────────────
+
+function OpportunitiesView() {
+  const [filter, setFilter] = useState("All");
+  const [applied, setApplied] = useState<Set<number>>(new Set());
+  const types = ["All", "Full-time", "Freelance", "Contract", "Collab"];
+  const filtered = OPPS.filter(o => filter === "All" || o.type === filter);
+
+  return (
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="py-6 px-6 max-w-3xl mx-auto">
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Opportunities</h2>
+          <p className="text-sm text-[#7B7A9A]">Matched to your skills and Upryzin Score</p>
+        </div>
+        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#7B7A9A] hover:text-white bg-white/5 hover:bg-white/10 rounded-xl border border-white/[0.06] transition-all">
+          <Filter size={14} />Filters
+        </motion.button>
+      </div>
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-1 scrollbar-hide">
+        {types.map(t => (
+          <motion.button key={t} onClick={() => setFilter(t)} whileTap={{ scale: 0.95 }}
+            className={`px-4 py-1.5 text-sm font-medium rounded-full flex-shrink-0 transition-all
+              ${filter === t ? "bg-violet-600 text-white shadow-lg shadow-violet-900/40" : "bg-white/5 text-[#7B7A9A] hover:bg-white/10 hover:text-white border border-white/[0.06]"}`}>
+            {t}
+          </motion.button>
+        ))}
+      </div>
+      <motion.div variants={staggerContainer} initial="initial" animate="animate" className="space-y-4">
+        {filtered.map(opp => (
+          <motion.div
+            key={opp.id} variants={staggerItem}
+            whileHover={{ y: -2, borderColor: "rgba(124,58,237,0.3)" }}
+            transition={{ type: "spring", stiffness: 300, damping: 24 }}
+            className="bg-[#0F0F1C] border border-white/[0.06] rounded-2xl p-5 cursor-pointer transition-colors"
+          >
+            <div className="flex items-start gap-4">
+              <img src={opp.logo} alt={opp.company} className="w-12 h-12 rounded-xl object-cover flex-shrink-0 bg-[#1A1A2E]" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <h3 className="font-semibold text-white text-sm leading-snug">{opp.title}</h3>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 border ${TYPE_BADGE[opp.type] ?? TYPE_BADGE["Collab"]}`}>{opp.type}</span>
+                </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-sm text-[#7B7A9A]">{opp.company}</span>
+                  <span className="text-[#3A3A5A]">·</span>
+                  <MapPin size={11} className="text-[#7B7A9A]" />
+                  <span className="text-xs text-[#7B7A9A]">{opp.location}</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {opp.skills.map(s => <span key={s} className="text-[11px] text-[#A8A8C8] bg-white/5 px-2 py-0.5 rounded-md">{s}</span>)}
+                </div>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-semibold text-white">{opp.salary}</span>
+                    <div className="flex items-center gap-1 text-xs text-[#7B7A9A]"><Clock size={11} /><span>{opp.posted}</span></div>
+                    <div className="flex items-center gap-1 text-xs text-[#7B7A9A]"><Users size={11} /><span>{opp.applicants} applied</span></div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-1.5 w-16 bg-white/10 rounded-full overflow-hidden">
+                      <motion.div
+                        className="h-full bg-violet-500 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${opp.match}%` }}
+                        transition={{ duration: 0.9, delay: 0.3, ease: "easeOut" }}
+                      />
+                    </div>
+                    <span className="text-xs font-bold text-violet-400">{opp.match}% match</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <motion.button
+              onClick={() => {
+                setApplied(p => new Set([...p, opp.id]));
+                toast.success(`Applied to ${opp.title}!`, { description: `Your application has been sent to ${opp.company}`, icon: "🎯" });
+              }}
+              whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.97 }}
+              disabled={applied.has(opp.id)}
+              className={`mt-4 w-full py-2.5 text-sm font-semibold rounded-xl border transition-all
+                ${applied.has(opp.id)
+                  ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20 cursor-default"
+                  : "bg-violet-600/10 hover:bg-violet-600/20 text-violet-400 hover:text-violet-300 border-violet-500/20 hover:border-violet-500/40"}`}
+            >
+              {applied.has(opp.id) ? "✓ Applied" : "Apply Now"}
+            </motion.button>
+          </motion.div>
+        ))}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Profile View ────────────────────────────────────────────────────────────
+
+function ProfileView() {
+  const [tab, setTab] = useState<"projects" | "posts" | "saved">("projects");
+  const [isFollowing] = useState(false);
+
+  return (
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="pb-10">
+      <div className="relative h-48 overflow-hidden"
+        style={{ backgroundImage: "url('https://images.unsplash.com/photo-1614854262318-831574f15f1f?w=1200&h=300&fit=crop&auto=format')", backgroundSize: "cover", backgroundPosition: "center" }}>
+        <div className="absolute inset-0 bg-gradient-to-t from-[#080810] via-[#080810]/40 to-transparent" />
+      </div>
+      <div className="px-6 -mt-12 relative">
+        <div className="flex items-end justify-between mb-5 flex-wrap gap-3">
+          <div className="flex items-end gap-4">
+            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.1 }} className="relative">
+              <img src={ME.avatar} alt={ME.name} className="w-24 h-24 rounded-2xl object-cover border-4 border-[#080810] bg-[#1A1A2E]" />
+              <div className="absolute -bottom-1.5 -right-1.5 bg-[#080810] rounded-full p-0.5">
+                <div className="bg-emerald-500 w-3.5 h-3.5 rounded-full border-2 border-[#080810]" />
+              </div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2, duration: 0.4 }} className="mb-1">
+              <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>{ME.name}</h1>
+              <p className="text-[#7B7A9A] text-sm">{ME.username}</p>
+            </motion.div>
+          </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex gap-2 mb-1">
+            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }}
+              className="px-5 py-2 text-sm font-bold bg-violet-600 hover:bg-violet-500 text-white rounded-xl transition-colors shadow-lg shadow-violet-900/40">
+              Edit Profile
+            </motion.button>
+            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.9 }}
+              onClick={() => toast("Profile link copied!", { icon: "🔗" })}
+              className="px-3 py-2 text-[#7B7A9A] hover:text-white bg-white/5 hover:bg-white/10 rounded-xl border border-white/[0.06] transition-all">
+              <Share2 size={16} />
+            </motion.button>
+          </motion.div>
+        </div>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.4 }} className="flex items-start justify-between gap-6 mb-5 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-[#CCCCE0] leading-relaxed mb-3">{ME.bio}</p>
+            <div className="flex items-center gap-2 text-xs text-[#7B7A9A] mb-3 flex-wrap">
+              <MapPin size={12} /><span>{ME.location}</span>
+              <span className="mx-0.5">·</span>
+              <Globe size={12} />
+              <motion.span whileHover={{ color: "#A78BFA" }} className="text-violet-400 cursor-pointer transition-colors">amara.creates.co</motion.span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {ME.skills.map((s, i) => (
+                <motion.span
+                  key={s}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.3 + i * 0.05 }}
+                  whileHover={{ scale: 1.05 }}
+                  className="text-xs text-violet-300 bg-violet-950/60 border border-violet-500/20 px-3 py-1 rounded-full cursor-pointer"
+                >{s}</motion.span>
+              ))}
+            </div>
+          </div>
+          <div className="flex-shrink-0 flex flex-col items-center gap-1">
+            <div className="relative">
+              <ScoreRing score={ME.score} size={88} />
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-2xl font-bold text-white leading-none">
+                  <AnimatedCounter value={ME.score} delay={0.3} />
+                </span>
+                <span className="text-[10px] text-[#7B7A9A]">/ 1000</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <Zap size={11} className="text-violet-400" />
+              <span className="text-[10px] font-bold text-violet-400 tracking-wider">UPRYZIN SCORE</span>
+            </div>
+          </div>
+        </motion.div>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="flex gap-8 pb-5 border-b border-white/[0.06]">
+          {([["Projects", ME.projects], ["Followers", ME.followers], ["Following", ME.following]] as const).map(([label, val]) => (
+            <motion.div key={label} whileHover={{ scale: 1.04 }} className="cursor-pointer">
+              <span className="text-xl font-bold text-white">
+                {label === "Projects" ? <AnimatedCounter value={val} delay={0.4} /> : fmtNum(val)}
+              </span>
+              <span className="text-sm text-[#7B7A9A] ml-1.5">{label}</span>
+            </motion.div>
+          ))}
+        </motion.div>
+      </div>
+      <div className="flex gap-0 px-6 mt-5 border-b border-white/[0.06]">
+        {(["projects", "posts", "saved"] as const).map(t => (
+          <motion.button key={t} onClick={() => setTab(t)} whileTap={{ scale: 0.95 }}
+            className={`px-5 py-3 text-sm font-semibold capitalize transition-all border-b-2 -mb-px
+              ${tab === t ? "text-white border-violet-500" : "text-[#7B7A9A] border-transparent hover:text-white"}`}>
+            {t}
+          </motion.button>
+        ))}
+      </div>
+      <motion.div variants={staggerContainer} initial="initial" animate="animate" className="px-6 mt-6 grid grid-cols-3 gap-3">
+        {PORTFOLIO.map((item, i) => (
+          <motion.div
+            key={item.id}
+            variants={staggerItem}
+            whileHover={{ scale: 1.02, zIndex: 1 }}
+            className="group relative rounded-xl overflow-hidden cursor-pointer bg-[#0F0F1C]"
+          >
+            <div className="aspect-square">
+              <motion.img
+                src={item.image} alt={item.title}
+                className="w-full h-full object-cover"
+                whileHover={{ scale: 1.06 }}
+                transition={{ duration: 0.4 }}
+              />
+            </div>
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileHover={{ opacity: 1 }}
+              className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              whileHover={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute bottom-0 left-0 right-0 p-3"
+            >
+              <p className="text-white text-xs font-semibold">{item.title}</p>
+              <div className="flex items-center gap-1 mt-1">
+                <Heart size={10} className="text-rose-400" fill="currentColor" />
+                <span className="text-[10px] text-white/70">{fmtNum(item.likes)}</span>
+              </div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileHover={{ opacity: 1 }}
+              className="absolute top-2 right-2"
+            >
+              <span className="text-[9px] font-bold bg-black/70 backdrop-blur-sm text-white/80 px-1.5 py-0.5 rounded">{item.category}</span>
+            </motion.div>
+          </motion.div>
+        ))}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Messages View ───────────────────────────────────────────────────────────
+
+function MessagesView() {
+  const [activeCon, setActiveCon] = useState(CONVERSATIONS[0]);
+  const [messages, setMessages] = useState(CHAT_MESSAGES);
+  const [input, setInput] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  const send = () => {
+    if (!input.trim()) return;
+    setMessages(p => [...p, { id: Date.now(), from: "me" as const, text: input, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }]);
+    setInput("");
+  };
+
+  return (
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="flex h-full">
+      {/* Conversations */}
+      <div className="w-72 flex-none border-r border-white/[0.05] flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-white/[0.05]">
+          <h2 className="font-bold text-white mb-3" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Messages</h2>
+          <div className="flex items-center gap-2 bg-white/5 border border-white/[0.06] rounded-xl px-3 py-2">
+            <Search size={13} className="text-[#7B7A9A]" />
+            <input placeholder="Search messages..." className="bg-transparent text-xs text-white placeholder-[#7B7A9A] outline-none flex-1" />
+          </div>
+        </div>
+        <motion.div variants={staggerContainer} initial="initial" animate="animate" className="flex-1 overflow-y-auto scrollbar-hide divide-y divide-white/[0.04]">
+          {CONVERSATIONS.map(c => (
+            <motion.button
+              key={c.id}
+              variants={staggerItem}
+              onClick={() => setActiveCon(c)}
+              whileHover={{ backgroundColor: "rgba(255,255,255,0.03)" }}
+              className={`w-full flex items-center gap-3 p-4 text-left transition-colors ${activeCon.id === c.id ? "bg-violet-950/20 border-l-2 border-violet-500" : ""}`}
+            >
+              <div className="relative flex-shrink-0">
+                <img src={c.avatar} alt={c.user} className="w-10 h-10 rounded-full object-cover bg-[#1A1A2E]" />
+                {c.online && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-[#080810]" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-0.5">
+                  <p className="text-sm font-semibold text-white truncate">{c.user}</p>
+                  <span className="text-[10px] text-[#7B7A9A] flex-shrink-0">{c.time}</span>
+                </div>
+                <p className="text-xs text-[#7B7A9A] truncate">{c.lastMsg}</p>
+              </div>
+              {c.unread > 0 && (
+                <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-5 h-5 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                  {c.unread}
+                </motion.span>
+              )}
+            </motion.button>
+          ))}
+        </motion.div>
+      </div>
+
+      {/* Chat Thread */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex items-center gap-3 p-4 border-b border-white/[0.05]">
+          <div className="relative">
+            <img src={activeCon.avatar} alt={activeCon.user} className="w-9 h-9 rounded-full object-cover" />
+            {activeCon.online && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-[#080810]" />}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">{activeCon.user}</p>
+            <p className="text-xs text-[#7B7A9A]">{activeCon.online ? "Active now" : "Last seen 2h ago"}</p>
+          </div>
+          <div className="ml-auto flex gap-2">
+            <motion.button whileTap={{ scale: 0.85 }} className="text-[#7B7A9A] hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5">
+              <Video size={16} />
+            </motion.button>
+            <motion.button whileTap={{ scale: 0.85 }} className="text-[#7B7A9A] hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5">
+              <MoreHorizontal size={16} />
+            </motion.button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-3">
+          <AnimatePresence initial={false}>
+            {messages.map(m => (
+              <motion.div
+                key={m.id}
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                className={`flex ${m.from === "me" ? "justify-end" : "justify-start"}`}
+              >
+                <div className={`max-w-xs lg:max-w-sm rounded-2xl px-4 py-2.5 ${m.from === "me" ? "bg-violet-600 text-white rounded-br-sm" : "bg-[#1A1A2E] text-[#CCCCE0] rounded-bl-sm"}`}>
+                  <p className="text-sm leading-relaxed">{m.text}</p>
+                  <p className={`text-[10px] mt-1 ${m.from === "me" ? "text-violet-300" : "text-[#7B7A9A]"}`}>{m.time}</p>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          <div ref={bottomRef} />
+        </div>
+
+        <div className="p-4 border-t border-white/[0.05]">
+          <div className="flex items-center gap-2 bg-white/5 border border-white/[0.08] rounded-2xl px-4 py-3 focus-within:border-violet-500/40 transition-colors">
+            <motion.button whileTap={{ scale: 0.85 }} className="text-[#7B7A9A] hover:text-violet-400 transition-colors">
+              <Paperclip size={16} />
+            </motion.button>
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && send()}
+              placeholder="Type a message..."
+              className="flex-1 bg-transparent text-sm text-white placeholder-[#7B7A9A] outline-none mx-2"
+            />
+            <motion.button whileTap={{ scale: 0.85 }} className="text-[#7B7A9A] hover:text-violet-400 transition-colors">
+              <Smile size={16} />
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.85 }}
+              onClick={send}
+              className={`ml-2 w-8 h-8 rounded-full flex items-center justify-center transition-all ${input.trim() ? "bg-violet-600 hover:bg-violet-500 text-white" : "bg-white/10 text-[#4A4A6A]"}`}
+            >
+              <Send size={14} />
+            </motion.button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Events View ─────────────────────────────────────────────────────────────
+
+function EventsView() {
+  const [rsvped, setRsvped] = useState<Set<number>>(new Set(EVENTS.filter(e => e.rsvped).map(e => e.id)));
+  const cats = ["All", "Conference", "Workshop", "Networking"];
+  const [cat, setCat] = useState("All");
+  const filtered = EVENTS.filter(e => cat === "All" || e.type === cat);
+
+  return (
+    <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="py-6 px-6 max-w-4xl mx-auto">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Events</h2>
+        <p className="text-sm text-[#7B7A9A] mb-4">Workshops, summits, and networking sessions</p>
+        <div className="flex gap-2">
+          {cats.map(c => (
+            <motion.button key={c} onClick={() => setCat(c)} whileTap={{ scale: 0.95 }}
+              className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all
+                ${cat === c ? "bg-violet-600 text-white shadow-lg shadow-violet-900/40" : "bg-white/5 text-[#7B7A9A] hover:bg-white/10 hover:text-white border border-white/[0.06]"}`}>
+              {c}
+            </motion.button>
+          ))}
+        </div>
+      </div>
+      <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {filtered.map(ev => (
+          <motion.div
+            key={ev.id} variants={staggerItem}
+            whileHover={{ y: -4 }}
+            transition={{ type: "spring", stiffness: 280, damping: 22 }}
+            className="bg-[#0F0F1C] border border-white/[0.06] rounded-2xl overflow-hidden hover:border-violet-500/20 transition-colors"
+          >
+            <div className="relative h-40 overflow-hidden">
+              <motion.img src={ev.cover} alt={ev.title} className="w-full h-full object-cover" whileHover={{ scale: 1.04 }} transition={{ duration: 0.4 }} />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+              <div className="absolute top-3 left-3 flex gap-2">
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-violet-600/80 backdrop-blur-sm text-white rounded-full">{ev.type}</span>
+                {ev.virtual && <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-600/80 backdrop-blur-sm text-white rounded-full">Virtual</span>}
+              </div>
+              {rsvped.has(ev.id) && (
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute top-3 right-3 w-7 h-7 bg-emerald-500 rounded-full flex items-center justify-center">
+                  <CheckCircle size={14} className="text-white" />
+                </motion.div>
+              )}
+            </div>
+            <div className="p-4">
+              <h3 className="font-bold text-white text-sm mb-1">{ev.title}</h3>
+              <div className="flex items-center gap-3 text-xs text-[#7B7A9A] mb-3">
+                <div className="flex items-center gap-1"><Calendar size={11} /><span>{ev.date}</span></div>
+                <span>·</span>
+                <div className="flex items-center gap-1"><MapPin size={11} /><span>{ev.location}</span></div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex -space-x-2">
+                    {TALENTS.slice(0, 3).map(t => (
+                      <img key={t.username} src={t.avatar} alt="" className="w-6 h-6 rounded-full border-2 border-[#0F0F1C] object-cover" />
+                    ))}
+                  </div>
+                  <span className="text-xs text-[#7B7A9A]">{ev.attendees.toLocaleString()} attending</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-amber-400">{ev.price}</span>
+                  <motion.button
+                    whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.94 }}
+                    onClick={() => {
+                      setRsvped(p => { const n = new Set(p); n.has(ev.id) ? n.delete(ev.id) : n.add(ev.id); return n; });
+                      if (!rsvped.has(ev.id)) toast.success("RSVP confirmed!", { description: `You're going to ${ev.title} 🎉`, icon: "🎟" });
+                    }}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all
+                      ${rsvped.has(ev.id) ? "bg-emerald-950/60 text-emerald-400 border border-emerald-500/20" : "bg-violet-600 hover:bg-violet-500 text-white"}`}
+                  >
+                    {rsvped.has(ev.id) ? "Going ✓" : "RSVP"}
+                  </motion.button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Right Panel ─────────────────────────────────────────────────────────────
+
+function RightPanel({ onViewProfile }: { onViewProfile: () => void }) {
+  const [followed, setFollowed] = useState<Set<string>>(new Set());
+
+  return (
+    <aside className="w-72 flex-none border-l border-white/[0.05] overflow-y-auto p-5 space-y-5 scrollbar-hide">
+      <motion.div
+        initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.1, duration: 0.4 }}
+        className="bg-gradient-to-br from-violet-950/60 to-[#0F0F1C] border border-violet-500/20 rounded-2xl p-4"
+      >
+        <div className="flex items-center gap-1.5 mb-3">
+          <Zap size={12} className="text-violet-400" />
+          <span className="text-[10px] font-bold text-violet-400 tracking-widest">UPRYZIN SCORE</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative flex-shrink-0">
+            <ScoreRing score={ME.score} size={72} />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-lg font-bold text-white">
+                <AnimatedCounter value={ME.score} delay={0.4} />
+              </span>
+            </div>
+          </div>
+          <div>
+            <p className="text-white font-semibold text-sm">{ME.name}</p>
+            <p className="text-[#7B7A9A] text-xs mb-2">{ME.role.split(" & ")[0]}</p>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="flex items-center gap-1">
+              <TrendingUp size={11} className="text-emerald-400" />
+              <span className="text-xs text-emerald-400 font-medium">+23 this week</span>
+            </motion.div>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-white/[0.06]">
+          {([["Followers", fmtNum(ME.followers)], ["Following", fmtNum(ME.following)], ["Projects", ME.projects]] as const).map(([label, val]) => (
+            <div key={label} className="text-center">
+              <div className="text-white font-bold text-sm">{val}</div>
+              <div className="text-[#7B7A9A] text-[10px]">{label}</div>
+            </div>
+          ))}
+        </div>
+        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={onViewProfile}
+          className="mt-3 w-full py-2 text-xs font-bold text-violet-300 bg-violet-600/15 hover:bg-violet-600/25 rounded-xl border border-violet-500/20 transition-all">
+          View My Profile
+        </motion.button>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2, duration: 0.4 }}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[10px] font-bold text-white tracking-widest">SUGGESTED CREATORS</h3>
+          <button className="text-[10px] text-violet-400 hover:text-violet-300 transition-colors">See all</button>
+        </div>
+        <motion.div variants={staggerContainer} initial="initial" animate="animate" className="space-y-3">
+          {SUGGESTED.map(c => (
+            <motion.div key={c.username} variants={staggerItem} className="flex items-center gap-3">
+              <motion.img whileHover={{ scale: 1.08 }} src={c.avatar} alt={c.name} className="w-9 h-9 rounded-full object-cover flex-shrink-0 bg-[#1A1A2E] cursor-pointer" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">{c.name}</p>
+                <p className="text-[11px] text-[#7B7A9A] truncate">{c.role}</p>
+              </div>
+              <div className="flex items-center gap-1 mr-1 flex-shrink-0">
+                <Zap size={9} className="text-violet-400" />
+                <span className="text-[11px] text-violet-400 font-bold">{c.score}</span>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={() => {
+                  setFollowed(p => { const n = new Set(p); n.has(c.username) ? n.delete(c.username) : n.add(c.username); return n; });
+                  if (!followed.has(c.username)) toast(`Following ${c.name}`, { icon: "✨" });
+                }}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all flex-shrink-0
+                  ${followed.has(c.username) ? "bg-violet-600/30 text-violet-300 border-violet-500/40" : "text-violet-400 bg-violet-950/60 border-violet-500/20 hover:bg-violet-950/80"}`}
+              >
+                {followed.has(c.username) ? "✓" : "Follow"}
+              </motion.button>
+            </motion.div>
+          ))}
+        </motion.div>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3, duration: 0.4 }}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[10px] font-bold text-white tracking-widest">HOT OPPORTUNITIES</h3>
+          <button className="text-[10px] text-violet-400 hover:text-violet-300 transition-colors">See all</button>
+        </div>
+        <div className="space-y-2.5">
+          {OPPS.slice(0, 3).map(o => (
+            <motion.div key={o.id} whileHover={{ x: 3 }} className="flex items-center gap-3 cursor-pointer group">
+              <img src={o.logo} alt={o.company} className="w-8 h-8 rounded-lg object-cover flex-shrink-0 bg-[#1A1A2E]" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-white truncate group-hover:text-violet-300 transition-colors">{o.title}</p>
+                <p className="text-[10px] text-[#7B7A9A]">{o.company} · {o.type}</p>
+              </div>
+              <ChevronRight size={13} className="text-[#4A4A6A] group-hover:text-violet-400 transition-colors flex-shrink-0" />
+            </motion.div>
+          ))}
+        </div>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4, duration: 0.4 }}
+        className="bg-[#0F0F1C] border border-white/[0.06] rounded-2xl p-4"
+      >
+        <div className="flex items-center gap-1.5 mb-2">
+          <Star size={11} className="text-amber-400" fill="currentColor" />
+          <span className="text-[10px] font-bold text-amber-400 tracking-widest">UPCOMING EVENT</span>
+        </div>
+        <h4 className="text-sm font-semibold text-white mb-1">African Design Summit 2025</h4>
+        <p className="text-xs text-[#7B7A9A] leading-relaxed mb-3">48 speakers, 12 workshops, one continent.</p>
+        <div className="flex items-center gap-2 text-xs text-[#7B7A9A] mb-3">
+          <Clock size={11} /><span>Aug 14–16 · Lagos, NG</span>
+        </div>
+        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }}
+          onClick={() => toast.success("RSVP confirmed! 🎉", { description: "See you at the African Design Summit" })}
+          className="w-full py-2 text-xs font-bold text-amber-400 bg-amber-950/40 hover:bg-amber-950/60 rounded-xl border border-amber-500/20 transition-all">
+          RSVP Now
+        </motion.button>
+      </motion.div>
+    </aside>
+  );
+}
+
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+
+function Sidebar({ view, setView, onSearch, onNotifications, onCreate }: {
+  view: View; setView: (v: View) => void;
+  onSearch: () => void; onNotifications: () => void; onCreate: () => void;
+}) {
+  return (
+    <motion.aside
+      initial={{ x: -20, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className="w-56 flex-none border-r border-white/[0.05] flex flex-col overflow-y-auto scrollbar-hide bg-[#0A0A18]"
+    >
+      <div className="px-5 py-5 flex items-center gap-2.5">
+        <motion.div whileHover={{ rotate: 15, scale: 1.1 }} transition={{ type: "spring", stiffness: 400 }}
+          className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-900/50 cursor-pointer">
+          <Zap size={14} className="text-white" fill="white" />
+        </motion.div>
+        <span className="text-lg font-bold text-white tracking-tight" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
+          upryzin
+        </span>
+      </div>
+
+      <div className="px-4 mb-4">
+        <motion.button
+          whileFocus={{ borderColor: "rgba(124,58,237,0.5)" }}
+          onClick={onSearch}
+          className="w-full flex items-center gap-2 bg-white/5 border border-white/[0.06] rounded-xl px-3 py-2 hover:border-violet-500/30 transition-colors cursor-text"
+        >
+          <Search size={14} className="text-[#7B7A9A] flex-shrink-0" />
+          <span className="text-sm text-[#7B7A9A]">Search...</span>
+          <span className="ml-auto text-[10px] text-[#3A3A5A] font-mono">⌘K</span>
+        </motion.button>
+      </div>
+
+      <nav className="px-3 flex-1 space-y-1">
+        <NavItem icon={Home} label="Home" active={view === "feed"} onClick={() => setView("feed")} />
+        <NavItem icon={Compass} label="Explore" active={view === "explore"} onClick={() => setView("explore")} />
+        <NavItem icon={Briefcase} label="Opportunities" active={view === "opportunities"} onClick={() => setView("opportunities")} />
+        <NavItem icon={Users} label="Collaborate" />
+        <NavItem icon={Calendar} label="Events" active={view === "events"} onClick={() => setView("events")} />
+        <NavItem icon={MessageSquare} label="Messages" active={view === "messages"} onClick={() => setView("messages")} badge={3} />
+        <div className="my-3 h-px bg-white/[0.05]" />
+        <NavItem icon={Award} label="My Profile" active={view === "profile"} onClick={() => setView("profile")} />
+        <NavItem icon={Bell} label="Notifications" onClick={onNotifications} badge={7} />
+        <NavItem icon={Settings} label="Settings" />
+      </nav>
+
+      <div className="p-4">
+        <motion.button
+          onClick={onCreate}
+          whileHover={{ scale: 1.02, backgroundColor: "#6d28d9" }}
+          whileTap={{ scale: 0.97 }}
+          className="w-full flex items-center justify-center gap-2 py-2.5 bg-violet-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-violet-900/40"
+        >
+          <Plus size={16} />
+          Create
+        </motion.button>
+      </div>
+
+      <div className="p-4 border-t border-white/[0.05]">
+        <motion.div whileHover={{ backgroundColor: "rgba(255,255,255,0.03)" }} className="flex items-center gap-3 cursor-pointer rounded-xl p-1.5 -m-1.5 transition-colors">
+          <img src={ME.avatar} alt={ME.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0 bg-[#1A1A2E]" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-white truncate">{ME.name}</p>
+            <div className="flex items-center gap-1">
+              <Zap size={9} className="text-violet-400" />
+              <span className="text-[10px] text-violet-400 font-bold">{ME.score}</span>
+            </div>
+          </div>
+          <MoreHorizontal size={15} className="text-[#4A4A6A] hover:text-white cursor-pointer flex-shrink-0 transition-colors" />
+        </motion.div>
+      </div>
+    </motion.aside>
+  );
+}
+
+// ─── App ──────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const [view, setView] = useState<View>("feed");
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [commentPostId, setCommentPostId] = useState<number | null>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to top on view change
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [view]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setShowSearch(true); }
+      if (e.key === "Escape") { setShowNotifs(false); setShowCreate(false); setShowSearch(false); setCommentPostId(null); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  const showRightPanel = view === "feed";
+  const showPanel = showNotifs || commentPostId !== null;
+
+  return (
+    <div className="flex h-screen bg-background overflow-hidden">
+      <Toaster
+        theme="dark"
+        position="bottom-right"
+        toastOptions={{
+          style: { background: "#13132A", border: "1px solid rgba(255,255,255,0.08)", color: "#EEEEFF" },
+        }}
+      />
+
+      <Sidebar
+        view={view} setView={setView}
+        onSearch={() => setShowSearch(true)}
+        onNotifications={() => setShowNotifs(p => !p)}
+        onCreate={() => setShowCreate(true)}
+      />
+
+      <main ref={mainRef} className="flex-1 overflow-y-auto min-w-0 scrollbar-hide relative">
+        <AnimatePresence mode="wait">
+          {view === "feed" && <FeedView key="feed" onOpenComments={(id) => setCommentPostId(id)} />}
+          {view === "explore" && <ExploreView key="explore" />}
+          {view === "opportunities" && <OpportunitiesView key="opportunities" />}
+          {view === "profile" && <ProfileView key="profile" />}
+          {view === "messages" && <MessagesView key="messages" />}
+          {view === "events" && <EventsView key="events" />}
+        </AnimatePresence>
+      </main>
+
+      {showRightPanel && !showPanel && <RightPanel onViewProfile={() => setView("profile")} />}
+
+      {/* Overlay panels */}
+      <AnimatePresence>
+        {showNotifs && (
+          <>
+            <motion.div variants={backdropVars} initial="initial" animate="animate" exit="exit"
+              className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowNotifs(false)} />
+            <NotificationsPanel onClose={() => setShowNotifs(false)} />
+          </>
+        )}
+        {commentPostId !== null && (
+          <>
+            <motion.div variants={backdropVars} initial="initial" animate="animate" exit="exit"
+              className="fixed inset-0 bg-black/40 z-40" onClick={() => setCommentPostId(null)} />
+            <CommentsPanel postId={commentPostId} onClose={() => setCommentPostId(null)} />
+          </>
+        )}
+        {showCreate && <CreateModal onClose={() => setShowCreate(false)} />}
+        {showSearch && <SearchOverlay onClose={() => setShowSearch(false)} />}
+      </AnimatePresence>
+    </div>
+  );
+}
