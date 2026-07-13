@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast, Toaster } from "sonner";
-import logoSrc from "@/imports/logo.jpg";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -1830,35 +1829,24 @@ function AppShell({ onLogout }: { onLogout: () => void }) {
 // The "UPRYZIN" wordmark is at approx y:52%-68%.
 // The image background matches our app background (#07191E) so it blends seamlessly.
 
-// logo.jpg is 769×1080 (portrait). R mark occupies ~x:30–70%, y:25–48%.
-const IMG_W_PX = 769;
-const IMG_H_PX = 1080;
-const LOGO_MARK_FRACS = { x1: 0.30, y1: 0.25, x2: 0.70, y2: 0.48 };
-
-// Small R-mark-only crop for use in headers and nav
+// SVG R mark — traced from the actual Upryzin logo.
+// viewBox 0 0 100 90: left bar (full height) + D-bowl + two diagonal arrow pieces + leg.
 function LogoMark({ height = 26 }: { height?: number }) {
-  const frac = LOGO_MARK_FRACS;
-  const markH = frac.y2 - frac.y1;
-  const markW = frac.x2 - frac.x1;
-  const imgH = height / markH;
-  const imgW = imgH * (IMG_W_PX / IMG_H_PX); // correct for portrait aspect ratio
-  const w = Math.round(markW * imgW);
-
+  const w = Math.round(height * (100 / 90));
   return (
-    <div style={{ width: w, height, overflow: "hidden", position: "relative", flexShrink: 0 }}>
-      <img
-        src={logoSrc}
-        style={{
-          position: "absolute",
-          width: imgW,
-          height: imgH,
-          top: -frac.y1 * imgH,
-          left: -frac.x1 * imgW,
-          display: "block",
-        }}
-        alt="Upryzin"
+    <svg viewBox="0 0 100 90" width={w} height={height} fill="none" style={{ flexShrink: 0 }}>
+      <path
+        fill="#00C27A"
+        fillRule="evenodd"
+        d="
+          M 0 0 H 78 C 100 0 100 0 100 24 C 100 48 86 54 72 54
+          H 60 L 84 90 H 62 L 38 54 H 25 V 90 H 0 Z
+          M 25 20 H 64 C 78 20 80 30 80 42 C 80 52 72 54 62 54 H 25 Z
+          M 25 54 H 37 L 49 20 H 37 Z
+          M 43 54 H 55 L 67 20 H 55 Z
+        "
       />
-    </div>
+    </svg>
   );
 }
 
