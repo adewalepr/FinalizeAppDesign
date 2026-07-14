@@ -4,8 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
 import '../../theme/colors.dart';
 
-const _filters = ['All', 'Remote', 'On-site', 'Urgent'];
-
 class OpportunitiesScreen extends StatefulWidget {
   const OpportunitiesScreen({super.key});
   @override
@@ -13,116 +11,131 @@ class OpportunitiesScreen extends StatefulWidget {
 }
 
 class _OpportunitiesScreenState extends State<OpportunitiesScreen> {
-  int _filter = 0;
+  String _filter = 'All';
+  final Set<int> _applied = {};
+  static const _filters = ['All', 'Full-time', 'Freelance', 'Contract', 'Collab'];
 
-  List<OpportunityModel> get _list {
-    if (_filter == 1) return sampleOpportunities.where((o) => o.location.contains('Remote')).toList();
-    if (_filter == 3) return sampleOpportunities.where((o) => o.isUrgent).toList();
-    return sampleOpportunities;
-  }
+  List<OpportunityModel> get _list => _filter == 'All'
+      ? sampleOpportunities
+      : sampleOpportunities.where((o) => o.type == _filter).toList();
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-        child: SingleChildScrollView(scrollDirection: Axis.horizontal,
-          child: Row(children: List.generate(_filters.length, (i) {
-            final active = i == _filter;
-            return GestureDetector(onTap: () => setState(() => _filter = i),
-              child: AnimatedContainer(duration: const Duration(milliseconds: 180),
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    return CustomScrollView(slivers: [
+      SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+        child: Row(children: [
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Opportunities', style: GoogleFonts.spaceGrotesk(color: AppColors.foreground, fontSize: 22, fontWeight: FontWeight.w700)),
+            Text('Matched to your skills & score', style: GoogleFonts.dmSans(color: AppColors.muted, fontSize: 13)),
+          ]),
+          const Spacer(),
+          Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.tune_rounded, color: AppColors.muted, size: 15),
+              const SizedBox(width: 6),
+              Text('Filters', style: GoogleFonts.dmSans(color: AppColors.muted, fontSize: 13)),
+            ])),
+        ]))),
+      SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        child: SizedBox(height: 38, child: ListView.separated(scrollDirection: Axis.horizontal,
+          itemCount: _filters.length, separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (_, i) {
+            final active = _filters[i] == _filter;
+            return GestureDetector(onTap: () => setState(() => _filter = _filters[i]),
+              child: AnimatedContainer(duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: active ? AppColors.primary : AppColors.card,
+                  color: active ? AppColors.primary : Colors.white.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: active ? AppColors.primary : AppColors.border)),
-                child: Text(_filters[i], style: GoogleFonts.dmSans(
-                    color: active ? AppColors.background : AppColors.foreground,
-                    fontSize: 13, fontWeight: active ? FontWeight.w600 : FontWeight.w400))));
+                  border: Border.all(color: active ? AppColors.primary : Colors.white12)),
+                child: Text(_filters[i], style: GoogleFonts.dmSans(color: active ? Colors.white : AppColors.muted, fontSize: 13, fontWeight: active ? FontWeight.w600 : FontWeight.w400))));
           })))),
-      Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Text('${_list.length} opportunities',
-            style: GoogleFonts.dmSans(color: AppColors.muted, fontSize: 13))),
-      const SizedBox(height: 12),
-      Expanded(child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        itemCount: _list.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (_, i) => _OppCard(opp: _list[i]))),
+      SliverPadding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        sliver: SliverList(delegate: SliverChildBuilderDelegate(
+          (_, i) => _OppCard(opp: _list[i], applied: _applied.contains(_list[i].id),
+            onApply: () => setState(() => _applied.add(_list[i].id))),
+          childCount: _list.length))),
     ]);
   }
 }
 
-class _OppCard extends StatefulWidget {
+class _OppCard extends StatelessWidget {
   final OpportunityModel opp;
-  const _OppCard({required this.opp});
-  @override
-  State<_OppCard> createState() => _OppCardState();
-}
-
-class _OppCardState extends State<_OppCard> {
-  bool _saved = false;
+  final bool applied;
+  final VoidCallback onApply;
+  const _OppCard({required this.opp, required this.applied, required this.onApply});
 
   @override
   Widget build(BuildContext context) {
-    final o = widget.opp;
-    return Container(padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: o.isUrgent ? AppColors.primary.withOpacity(0.3) : AppColors.border)),
+    return Container(margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: opp.isUrgent ? AppColors.primary.withOpacity(0.25) : Colors.white.withOpacity(0.06))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           ClipRRect(borderRadius: BorderRadius.circular(10),
-            child: CachedNetworkImage(imageUrl: o.logoUrl, width: 44, height: 44,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Container(width: 44, height: 44, color: AppColors.cardDeep))),
+            child: CachedNetworkImage(imageUrl: opp.logoUrl, width: 46, height: 46, fit: BoxFit.cover,
+                placeholder: (_, __) => Container(width: 46, height: 46, color: AppColors.cardDeep))),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              if (o.isUrgent) ...[
-                Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(4)),
-                  child: Text('URGENT', style: GoogleFonts.dmSans(color: AppColors.primary,
-                      fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.8))),
-                const SizedBox(width: 6),
-              ],
-              Flexible(child: Text(o.title, style: GoogleFonts.spaceGrotesk(
-                  color: AppColors.foreground, fontSize: 15, fontWeight: FontWeight.w600),
-                  maxLines: 1, overflow: TextOverflow.ellipsis)),
+              if (opp.isUrgent) Container(margin: const EdgeInsets.only(right: 6), padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
+                child: Text('URGENT', style: GoogleFonts.dmSans(color: AppColors.primary, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.8))),
+              Expanded(child: Text(opp.title, style: GoogleFonts.spaceGrotesk(color: AppColors.foreground, fontSize: 14, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
             ]),
             const SizedBox(height: 2),
-            Text(o.company, style: GoogleFonts.dmSans(color: AppColors.muted, fontSize: 13)),
+            Text('${opp.company}', style: GoogleFonts.dmSans(color: AppColors.muted, fontSize: 13)),
           ])),
-          GestureDetector(onTap: () => setState(() => _saved = !_saved),
-            child: Icon(_saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                color: _saved ? AppColors.primary : AppColors.muted, size: 22)),
+          const SizedBox(width: 8),
+          // Type badge
+          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(color: typeBg(opp.type), borderRadius: BorderRadius.circular(20), border: Border.all(color: typeFg(opp.type).withOpacity(0.3))),
+            child: Text(opp.type, style: GoogleFonts.dmSans(color: typeFg(opp.type), fontSize: 10, fontWeight: FontWeight.w700))),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Row(children: [
-          const Icon(Icons.location_on_outlined, color: AppColors.muted, size: 14),
-          const SizedBox(width: 4),
-          Text(o.location, style: GoogleFonts.dmSans(color: AppColors.muted, fontSize: 12)),
-          const SizedBox(width: 14),
-          const Icon(Icons.attach_money_rounded, color: AppColors.primary, size: 14),
-          Text(o.budgetRange, style: GoogleFonts.dmSans(color: AppColors.primary,
-              fontSize: 12, fontWeight: FontWeight.w600)),
+          const Icon(Icons.location_on_outlined, color: AppColors.muted, size: 13),
+          const SizedBox(width: 3),
+          Text(opp.location, style: GoogleFonts.dmSans(color: AppColors.muted, fontSize: 12)),
+          const SizedBox(width: 12),
+          const Icon(Icons.attach_money_rounded, color: AppColors.primary, size: 13),
+          Text(opp.salary, style: GoogleFonts.dmSans(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
           const Spacer(),
-          Text(o.postedAgo, style: GoogleFonts.dmSans(color: AppColors.muted, fontSize: 11)),
+          const Icon(Icons.access_time_rounded, color: AppColors.muted, size: 12),
+          const SizedBox(width: 3),
+          Text(opp.posted, style: GoogleFonts.dmSans(color: AppColors.muted, fontSize: 11)),
+        ]),
+        const SizedBox(height: 10),
+        Wrap(spacing: 6, runSpacing: 6, children: opp.skills.map((s) =>
+          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.04), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white12)),
+            child: Text(s, style: GoogleFonts.dmSans(color: const Color(0xFFA8A8C8), fontSize: 11)))).toList()),
+        const SizedBox(height: 12),
+        // Bottom row: applicants + match bar + apply
+        Row(children: [
+          Text('${opp.applicants} applicants', style: GoogleFonts.dmSans(color: AppColors.muted, fontSize: 12)),
+          const Spacer(),
+          // Match bar
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('${opp.match}% match', style: GoogleFonts.dmSans(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 3),
+            ClipRRect(borderRadius: BorderRadius.circular(4),
+              child: SizedBox(width: 60, height: 5,
+                child: LinearProgressIndicator(value: opp.match / 100, backgroundColor: Colors.white12, color: AppColors.primary))),
+          ]),
         ]),
         const SizedBox(height: 12),
-        Wrap(spacing: 6, runSpacing: 6, children: o.tags.map((t) =>
-          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: AppColors.cardDeep,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AppColors.border)),
-            child: Text(t, style: GoogleFonts.dmSans(color: AppColors.muted, fontSize: 11)))).toList()),
-        const SizedBox(height: 14),
-        SizedBox(width: double.infinity, height: 42,
-          child: ElevatedButton(onPressed: () {},
-            child: Text('Apply Now', style: GoogleFonts.spaceGrotesk(
-                fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.background)))),
+        SizedBox(width: double.infinity, height: 46,
+          child: OutlinedButton(
+            onPressed: applied ? null : onApply,
+            style: OutlinedButton.styleFrom(
+              backgroundColor: applied ? Colors.white.withOpacity(0.03) : AppColors.primary.withOpacity(0.1),
+              side: BorderSide(color: applied ? Colors.white12 : AppColors.primary.withOpacity(0.3)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              foregroundColor: applied ? Colors.green.shade400 : AppColors.primary),
+            child: Text(applied ? '✓ Applied' : 'Apply Now', style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w700)))),
       ]));
   }
 }
